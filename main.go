@@ -13,6 +13,7 @@ going to be updated in the future
 */
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,42 +22,34 @@ import (
 	"golang.org/x/net/html"
 )
 
-func parse_schedule(doc, group string) {
+func parse_schedule(doc, group string) error {
 	tkn := html.NewTokenizer(strings.NewReader(doc))
-	isAFlag := false
-	txtRaw := ""
-	fmt.Println(isAFlag)
-	prev := []string{}
 	for {
 
 		tt := tkn.Next()
-		txtRaw = string(tkn.Raw())
+		txtRaw := string(tkn.Raw())
 		if tt == html.ErrorToken {
-			return
+			return errors.New("Group was not found. Maybe you made a mistake?")
 		}
 		if tt == html.StartTagToken {
 			t := tkn.Token()
 			if t.Data == "a" {
-				isAFlag = true
 
 				if strings.Contains(txtRaw, "href=\"/schedule/") {
-					fmt.Println(txtRaw)
-					prev = append(prev, txtRaw)
+					href := "\"https://lks.bmstu.ru" + strings.Trim(strings.Split(txtRaw, " ")[1][6:], "\"") // this line gets the href link from the raw txt
+					tkn.Next()
+					hrefGroup := strings.TrimSpace(string(tkn.Raw())) // this fetches the group name
+					if hrefGroup == group {
+						fmt.Println(href + " " + hrefGroup)
+						return nil
+					}
 				}
 			}
 
 		}
 
-		if isAFlag && tt == html.TextToken {
-			if group == strings.TrimSpace(txtRaw) {
-				fmt.Println(txtRaw) // if name is equal to group print it
-				return
-			}
-
-			isAFlag = false
-		}
-
 	}
+
 }
 
 func main() {
@@ -78,5 +71,9 @@ func main() {
 	fmt.Println("Please enter your group in Russian, e.g \"ИУ7-21Б\": ")
 	fmt.Scanln(&group)
 
-	parse_schedule(string(body), group)
+	err = parse_schedule(string(body), strings.ToUpper(group))
+
+	if err != nil {
+		fmt.Println(err)
+	}
 }
