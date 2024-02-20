@@ -16,32 +16,39 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"golang.org/x/net/html"
 )
 
-func parse_schedule(doc, group string) error {
+func findSchedule(doc, group string) (string, error) {
 	tkn := html.NewTokenizer(strings.NewReader(doc))
 	for {
 
 		tt := tkn.Next()
 		txtRaw := string(tkn.Raw())
-		if tt == html.ErrorToken {
-			return errors.New("Group was not found. Maybe you made a mistake?")
+		if tt == html.ErrorToken { // if end of html file encountered then link wasn't found
+			return "", errors.New("Group was not found. Perhaps you made a mistake?")
 		}
 		if tt == html.StartTagToken {
 			t := tkn.Token()
 			if t.Data == "a" {
 
 				if strings.Contains(txtRaw, "href=\"/schedule/") {
-					href := "\"https://lks.bmstu.ru" + strings.Trim(strings.Split(txtRaw, " ")[1][6:], "\"") // this line gets the href link from the raw txt
+					// the line below gets the href link from the raw txt.
+					href := "https://lks.bmstu.ru" + strings.Trim(strings.Split(txtRaw, " ")[1][6:], "\"")
 					tkn.Next()
-					hrefGroup := strings.TrimSpace(string(tkn.Raw())) // this fetches the group name
-					if hrefGroup == group {
+					hrefGroup := strings.TrimSpace(string(tkn.Raw()))            // this fetches the group name.
+					if strings.Contains(hrefGroup, group) || group == "--TEST" { // <- finally, if group name matches the query, we print it.
 						fmt.Println(href + " " + hrefGroup)
-						return nil
+						if group != "--TEST" {
+							return href, nil
+						}
+
 					}
 				}
 			}
@@ -52,7 +59,38 @@ func parse_schedule(doc, group string) error {
 
 }
 
+func openBrowser(url string) { // this is temporarily
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+// not done yet
+// func readConfig(path string) bool {
+// 	f, err := os.Open(path)
+// 	if err != nil { // if any error than set everything to default
+// 		return false
+// 	}
+
+// 	return false
+// }
+
 func main() {
+	browser := false // if true opens browser when finds schedule, else does nothing.
+
 	h, err := http.Get("https://lks.bmstu.ru/schedule/list") // here we connect to the website
 	if err != nil || h.StatusCode == 404 {                   // if any error encountered
 		fmt.Println("Couldn't connect to bmstu's website. Did you write the correct URL? Or is it possibly down?")
@@ -61,6 +99,9 @@ func main() {
 
 	fmt.Printf("Successfully connected to lks.bmstu.ru on %s\n", h.Header.Get("Date"))
 	body, err := io.ReadAll(h.Body)
+
+	defer h.Body.Close()
+
 	if err != nil {
 		fmt.Println("Unexpected error encountered.")
 		return
@@ -71,9 +112,16 @@ func main() {
 	fmt.Println("Please enter your group in Russian, e.g \"ИУ7-21Б\": ")
 	fmt.Scanln(&group)
 
-	err = parse_schedule(string(body), strings.ToUpper(group))
+	link, err := findSchedule(string(body), strings.ToUpper(group))
 
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	if group != "--test" && browser {
+		openBrowser(link)
+	}
+
+	fmt.Println("Press CTRL + C or ENTER to exit")
+	fmt.Scanf("h")
 }
