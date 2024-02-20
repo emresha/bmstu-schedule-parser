@@ -21,14 +21,16 @@ import (
 	"golang.org/x/net/html"
 )
 
-func parse_schedule(doc string) {
+func parse_schedule(doc, group string) {
 	tkn := html.NewTokenizer(strings.NewReader(doc))
 	isAFlag := false
+	txtRaw := ""
 	fmt.Println(isAFlag)
+	prev := []string{}
 	for {
 
 		tt := tkn.Next()
-
+		txtRaw = string(tkn.Raw())
 		if tt == html.ErrorToken {
 			return
 		}
@@ -36,11 +38,22 @@ func parse_schedule(doc string) {
 			t := tkn.Token()
 			if t.Data == "a" {
 				isAFlag = true
-				txtRaw := string(tkn.Raw())
+
 				if strings.Contains(txtRaw, "href=\"/schedule/") {
 					fmt.Println(txtRaw)
+					prev = append(prev, txtRaw)
 				}
 			}
+
+		}
+
+		if isAFlag && tt == html.TextToken {
+			if group == strings.TrimSpace(txtRaw) {
+				fmt.Println(txtRaw) // if name is equal to group print it
+				return
+			}
+
+			isAFlag = false
 		}
 
 	}
@@ -60,5 +73,10 @@ func main() {
 		return
 	}
 
-	parse_schedule(string(body))
+	var group string
+
+	fmt.Println("Please enter your group in Russian, e.g \"ИУ7-21Б\": ")
+	fmt.Scanln(&group)
+
+	parse_schedule(string(body), group)
 }
